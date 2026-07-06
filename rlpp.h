@@ -1,5 +1,5 @@
 /*
-    RL Packed Pool
+    rlpp.h - RL Packed Pool
         This single header file library implements
         a data structure where allocations and removals
         always ensures that the data is packed tightly.
@@ -41,15 +41,15 @@
                 and see if it returns a non-null pointer or
                 use the rlpp_exists function
 
-            bool rlpp_exists(T* pool, rlpp_id_t id);
-                returns true if the id points to a
+            uint8_t rlpp_exists(T* pool, rlpp_id_t id);
+                returns non-zero if the id points to a
                 valid value inside the pool. if the id
-                or the pool is null it returns false.
+                or the pool is null it returns 0.
                 if the generation of the current value
                 at a given index doesnt match the one
-                from the id, this returns false.
+                from the id, this returns 0.
                 if the mapped value is free, it returns
-                false since the value has been freed.
+                0 since the value has been freed.
 
             void rlpp_remove(T* pool, rlpp_id_t id);
                 removes the data that is behind the
@@ -95,10 +95,6 @@
 #endif
 #endif
 
-#ifndef RLPP_PREFIX
-#define RLPP_PREFIX rlpp_
-#endif
-
 #define RLPP_TRUE           (1)
 #define RLPP_FALSE          (0)
 #define RLPP_NULL           ((rlpp_id_t)0)
@@ -107,10 +103,10 @@
     ((rlpp__maybe_grow((POOL), 1)) ? ((POOL)[rlpp__header(POOL)->length++] = (VALUE), rlpp__get_new_id((POOL))) : RLPP_NULL)
 
 #define rlpp_get_unchecked(POOL, ID) \
-    (&(POOL)[rlpp__header(POOL)->map_list[(uint32_t)(((ID) & 0xFFFFFFFF) - 1)].index])
+    (&(POOL)[rlpp__header((POOL))->map_list[(uint32_t)(((ID) & 0xFFFFFFFF) - 1)].index])
 
 #define rlpp_exists(POOL, ID) \
-    (rlr_get(POOL, ID) != NULL)
+    (rlr_get((POOL), (ID)) != NULL)
 
 #define rlpp_remove(POOL, ID) \
     rlpp__remove((POOL), (ID))
