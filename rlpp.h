@@ -28,9 +28,13 @@
                 returns the pointer to the data
                 inside the pool given the stable id
                 receieved by the alloc function
+            
+            void* rlpp_get_fast(T* pool, rlpp_id_t id);
+                same as rlpp_get but faster due to less
+                bounds and pointer checks
 
             T* rlpp_get_unchecked(T* pool, rlpp_id_t id);
-                same as above but faster because
+                same as rlpp_get but faster because
                 it doesnt do any checks. this should only
                 be used whenever the id is sure to be valid.
                 either validate it with the rlpp_get function
@@ -158,6 +162,21 @@ static inline void* rlpp_get(void* pool, rlpp_id_t id) {
     if(map_index >= header->capacity) {
         return NULL;
     }
+    rlpp_mapping_t* mapping = &header->map_list[map_index];
+    if(mapping->free || mapping->generation != generation) {
+        return NULL;
+    }
+    uint8_t* ptr = ((uint8_t*)pool) + mapping->index * header->element_size;
+    return (void*)ptr;
+}
+
+static inline void* rlpp_get_fast(void* pool, rlpp_id_t id) {
+    if(id == RLPP_NULL) {
+        return NULL;
+    }
+    rlpp_header_t* header = rlpp__header(pool);
+    uint32_t map_index = (uint32_t)((id & 0xFFFFFFFF) - 1);
+    uint32_t generation = (uint32_t)((id >> 32) & 0xFFFFFFFF);
     rlpp_mapping_t* mapping = &header->map_list[map_index];
     if(mapping->free || mapping->generation != generation) {
         return NULL;
