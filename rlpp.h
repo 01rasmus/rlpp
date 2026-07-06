@@ -102,6 +102,9 @@
 #define rlpp_alloc(POOL, VALUE) \
     ((rlpp__maybe_grow((POOL), 1)) ? ((POOL)[rlpp__header(POOL)->length++] = (VALUE), rlpp__get_new_id((POOL))) : RLPP_NULL)
 
+#define rlpp_get_unchecked(POOL, ID) \
+    (&(POOL)[rlpp__header(POOL)->map_list[(uint32_t)(((ID) & 0xFFFFFFFF) - 1)].index])
+
 #define rlpp_exists(POOL, ID) \
     (rlr_get(POOL, ID) != NULL)
 
@@ -162,9 +165,6 @@ static inline void* rlpp_get(void* pool, rlpp_id_t id) {
     uint8_t* ptr = ((uint8_t*)pool) + mapping->index * header->element_size;
     return (void*)ptr;
 }
-
-#define rlpp_get_unchecked(POOL, ID) \
-    (&(POOL)[rlpp__header(POOL)->map_list[(uint32_t)(((ID) & 0xFFFFFFFF) - 1)].index])
 
 #endif /* RLPP_INCLUDE_H */
 
