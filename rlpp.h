@@ -82,13 +82,11 @@
                 the c lib's default, malloc, realloc and free
                 functions.
 
-                note: if it fails, the pool will be null,
-                      which will make it use the default
-                      allocator when a new entry is allocated.
-                      make sure to check if the pool pointer
-                      is non-null after the custom init
-                      function has executed to make sure it
-                      initialized correctly
+                returns RLPP_FALSE when it fails and RLPP_TRUE
+                when it succeeds. the pool should not be used if
+                it returns RLPP_FALSE, because then the pool
+                stays null, and may use the default allocator
+
                 note: 'rlp_init_custom(pool, 0, NULL)' will
                       therefore make the pool behave as
                       default
@@ -201,7 +199,7 @@ typedef struct rlpp_header_t {
 RLPPDEF rlpp_id_t RLPP_FUNC(_get_new_id)(void* pool);
 RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id);
 RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool, uint64_t element_size, uint32_t needed_entries);
-RLPPDEF void RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_t capacity, rlpp_allocator_t* allocator);
+RLPPDEF uint8_t RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_t capacity, rlpp_allocator_t* allocator);
 RLPPDEF void RLPP_FUNC(_free)(void* pool);
 
 static inline void* RLPP_FUNC(_get)(void* pool, rlpp_id_t id) {
@@ -355,7 +353,7 @@ RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_
     return RLPP_TRUE;
 }
 
-RLPPDEF void RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_t custom_capacity, rlpp_allocator_t* custom_allocator) {
+RLPPDEF uint8_t RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_t custom_capacity, rlpp_allocator_t* custom_allocator) {
     rlpp_allocator_t* allocator = custom_allocator ? custom_allocator : &RLPP_FUNC(_default_allocator);
     rlpp_header_t* header = NULL;
     rlpp_mapping_t* mapping = NULL;
@@ -388,7 +386,7 @@ RLPPDEF void RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_
     }
 
     (*pool) = rlpp__header_to_pool(header);
-    return;
+    return RLPP_TRUE;
 err:
     if(header) {
         allocator->free(header, header_allocation_size, allocator->user);
@@ -397,6 +395,7 @@ err:
         allocator->free(mapping, mapping_allocation_size, allocator->user);
     }
     (*pool) = NULL;
+    return RLPP_FALSE;
 }
 
 RLPPDEF void RLPP_FUNC(_free)(void* pool) {
