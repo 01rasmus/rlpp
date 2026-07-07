@@ -94,25 +94,39 @@
 #ifdef RLPP_STATIC
 #define RLPPDEF static
 #else
-#define RLPPDEF extern
+#define RLPPDEF
 #endif
 #endif
+
+#ifndef RLPP_PREFIX
+#define RLPP_PREFIX rlpp_
+#endif
+
+#define RLPP_CONCAT(PREFIX, NAME)               PREFIX##NAME
+#define RLPP_FUNC_WITH_PREFIX(PREFIX, NAME)     RLPP_CONCAT(PREFIX, NAME)
+#define RLPP_FUNC(NAME)                         RLPP_FUNC_WITH_PREFIX(RLPP_PREFIX, NAME)
 
 #define RLPP_TRUE           (1)
 #define RLPP_FALSE          (0)
 #define RLPP_NULL           ((rlpp_id_t)0)
 
 #define rlpp_alloc(POOL, VALUE) \
-    ((rlpp__maybe_grow((POOL), 1)) ? ((POOL)[rlpp__header(POOL)->length++] = (VALUE), rlpp__get_new_id((POOL))) : RLPP_NULL)
+    ((rlpp__maybe_grow((POOL), 1)) ? ((POOL)[rlpp__header(POOL)->length++] = (VALUE), RLPP_FUNC(_get_new_id)((POOL))) : RLPP_NULL)
+
+#define rlpp_get(POOL, ID) \
+    RLPP_FUNC(_get)((POOL), (ID))
+
+#define rlpp_get_fast(POOL, ID) \
+    RLPP_FUNC(_get_fast)((POOL), (ID))
 
 #define rlpp_get_unchecked(POOL, ID) \
     (&(POOL)[rlpp__header((POOL))->map_list[(uint32_t)(((ID) & 0xFFFFFFFF) - 1)].index])
 
 #define rlpp_exists(POOL, ID) \
-    (rlr_get((POOL), (ID)) != NULL)
+    (RLPP_FUNC(get)((POOL), (ID)) != NULL)
 
 #define rlpp_remove(POOL, ID) \
-    rlpp__remove((POOL), (ID))
+    RLPP_FUNC(_remove)((POOL), (ID))
 
 #define rlpp_len(POOL) \
     ((POOL) ? (rlpp__header(POOL)->length) : 0)
@@ -130,7 +144,7 @@
     ((void*)((rlpp_header_t*)(HEADER) + 1))
 
 #define rlpp__maybe_grow(POOL, NUM) \
-    (!(POOL) || ((rlpp_len((POOL)) + (NUM)) > rlpp_cap((POOL))) ? rlpp__grow((void**)&(POOL), sizeof(*(POOL)), (NUM)) : 1)
+    (!(POOL) || ((rlpp_len((POOL)) + (NUM)) > rlpp_cap((POOL))) ? RLPP_FUNC(_grow)((void**)&(POOL), sizeof(*(POOL)), (NUM)) : 1)
 
 typedef uint64_t rlpp_id_t;
 
@@ -147,11 +161,11 @@ typedef struct rlpp_header_t {
     uint32_t element_size;
 } rlpp_header_t;
 
-RLPPDEF rlpp_id_t rlpp__get_new_id(void* pool);
-RLPPDEF void rlpp__remove(void* pool, rlpp_id_t id);
-RLPPDEF uint8_t rlpp__grow(void** pool, uint64_t element_size, uint32_t needed_entries);
+RLPPDEF rlpp_id_t RLPP_FUNC(_get_new_id)(void* pool);
+RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id);
+RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool, uint64_t element_size, uint32_t needed_entries);
 
-static inline void* rlpp_get(void* pool, rlpp_id_t id) {
+static inline void* RLPP_FUNC(_get)(void* pool, rlpp_id_t id) {
     if(!pool || id == RLPP_NULL) {
         return NULL;
     }
@@ -169,7 +183,7 @@ static inline void* rlpp_get(void* pool, rlpp_id_t id) {
     return (void*)ptr;
 }
 
-static inline void* rlpp_get_fast(void* pool, rlpp_id_t id) {
+static inline void* RLPP_FUNC(_get_fast)(void* pool, rlpp_id_t id) {
     if(id == RLPP_NULL) {
         return NULL;
     }
@@ -189,7 +203,7 @@ static inline void* rlpp_get_fast(void* pool, rlpp_id_t id) {
 #ifdef RLPP_IMPLEMENTATION
 #define RLPP_DEFAULT_CAPACITY   16
 
-RLPPDEF rlpp_id_t rlpp__get_new_id(void* pool) {
+RLPPDEF rlpp_id_t RLPP_FUNC(_get_new_id)(void* pool) {
     rlpp_header_t* header = rlpp__header(pool);
     uint32_t last_index = header->length - 1;
 
@@ -207,7 +221,7 @@ RLPPDEF rlpp_id_t rlpp__get_new_id(void* pool) {
     return RLPP_NULL;
 }
 
-RLPPDEF void rlpp__remove(void* pool, rlpp_id_t id) {
+RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id) {
     if(!pool) {
         return;
     }
@@ -216,7 +230,7 @@ RLPPDEF void rlpp__remove(void* pool, rlpp_id_t id) {
     //todo:
 }
 
-RLPPDEF uint8_t rlpp__grow(void** pool_ptr, uint64_t element_size, uint32_t needed_entries) {
+RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_t needed_entries) {
     void* pool = *pool_ptr;
     uint32_t new_capacity = pool ? rlpp__header(pool)->capacity : RLPP_DEFAULT_CAPACITY;
     uint32_t new_length = pool ? (rlpp__header(pool)->length + needed_entries) : needed_entries;
