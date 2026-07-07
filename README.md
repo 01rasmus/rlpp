@@ -1,2 +1,2 @@
-# rl_packed_pool
-A data structure to allocate data in a packed way while also having stable indices of each element.
+# rlpp
+A stable id data structure that ensures that all entries are placed contiguous in memory.

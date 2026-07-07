@@ -61,6 +61,9 @@
                 returns the amount of entries
                 inside the pool
 
+            uint32_t rlpp_cap(T* pool);
+                returns the capacity of the pool
+
             void rlpp_free(T* pool);
                 frees the entire pool
                 (should not be confused with
