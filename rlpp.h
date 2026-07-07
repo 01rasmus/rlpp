@@ -82,6 +82,13 @@
                 the c lib's default, malloc, realloc and free
                 functions.
 
+                note: if it fails, the pool will be null,
+                      which will make it use the default
+                      allocator when a new entry is allocated.
+                      make sure to check if the pool pointer
+                      is non-null after the custom init
+                      function has executed to make sure it
+                      initialized correctly
                 note: 'rlp_init_custom(pool, 0, NULL)' will
                       therefore make the pool behave as
                       default
@@ -233,6 +240,7 @@ static inline void* RLPP_FUNC(_get_fast)(void* pool, rlpp_id_t id) {
 #endif /* RLPP_INCLUDE_H */
 
 #ifdef RLPP_IMPLEMENTATION
+#include <string.h>
 #define RLPP_DEFAULT_CAPACITY   16
 
 static inline void* RLPP_FUNC(_default_alloc)(uint64_t size, void* user) {
@@ -315,6 +323,7 @@ RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_
             };
         }
 
+        memcpy(&new_header->allocator, &RLPP_FUNC(_default_allocator), sizeof(rlpp_allocator_t));
         new_header->capacity = new_capacity;
         new_header->length = 0;
         new_header->element_size = element_size;
@@ -363,12 +372,7 @@ RLPPDEF void RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_
         goto err;
     }
 
-    header->allocator = (rlpp_allocator_t){
-        .alloc = allocator->alloc,
-        .realloc = allocator->realloc,
-        .free = allocator->free,
-        .user = allocator->user
-    };
+    memcpy(&header->allocator, allocator, sizeof(rlpp_allocator_t));
     header->capacity = capacity;
     header->size_is_fixed = custom_capacity != 0;
     header->length = 0;
@@ -396,7 +400,7 @@ err:
 }
 
 RLPPDEF void RLPP_FUNC(_free)(void* pool) {
-    if(pool) {
+    if(!pool) {
         return;
     }
     rlpp_header_t* header = rlpp__header(pool);
