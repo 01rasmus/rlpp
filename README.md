@@ -1,5 +1,5 @@
 # 📦 rlpp - RL Packed Pool
-A tightly packed data structure accesible with stable id handles written with cache friendliness in mind. It is a single header file library written in C.
+A tightly packed data structure accessible with stable id handles written with cache friendliness in mind. It is a single header file library written in C.
 
 ## How to Use
 In one source file, include the header file with the implementation define to compile the function definitions.
