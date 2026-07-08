@@ -186,7 +186,6 @@ typedef struct rlpp_mapping_t {
     uint32_t map_index;
     uint32_t child;
     uint8_t free;
-    uint8_t has_child;
 } rlpp_mapping_t;
 
 typedef struct rlpp_allocator_t {
@@ -251,6 +250,40 @@ static inline void* RLPP_FUNC(_get_fast)(void* pool, rlpp_id_t id) {
 #include <string.h>
 #define RLPP_DEFAULT_CAPACITY   16
 
+static inline void RLPP_FUNC(_initialize_new_map_list_entries)(rlpp_header_t* header, rlpp_mapping_t* map_list, uint32_t start_index, uint32_t end_index) {
+    for(uint32_t i = start_index; i < end_index; i++) {
+        map_list[i] = (rlpp_mapping_t){
+            .free = RLPP_TRUE,
+            .generation = 0,
+            .array_index = 0,
+            .map_index = 0,
+            .child = header->next_free_map_index,
+        };
+        header->next_free_map_index = i;
+    }
+}
+
+static inline rlpp_header_t* RLPP_FUNC(_reallocate)(rlpp_header_t* header, uint32_t new_cap) {
+    uint32_t old_cap = header->capacity;
+    uint64_t old_size = sizeof(rlpp_header_t) + header->element_size * old_cap;
+    uint64_t new_size = sizeof(rlpp_header_t) + header->element_size * new_cap;
+    uint64_t old_mapping_size = sizeof(rlpp_mapping_t) * old_cap;
+    uint64_t new_mapping_size = sizeof(rlpp_mapping_t) * new_cap;
+    rlpp_mapping_t* new_map_list = header->allocator.realloc(header->map_list, old_mapping_size, new_mapping_size, header->allocator.user);
+    if(!new_map_list) {
+        return NULL;
+    }
+    header->map_list = new_map_list;
+    rlpp_header_t* new_header = header->allocator.realloc(header, old_size, new_size, header->allocator.user);
+    if(!new_header) {
+        return NULL;
+    }
+    
+    new_header->capacity = new_cap;
+    RLPP_FUNC(_initialize_new_map_list_entries)(new_header, new_map_list, old_cap, new_cap);
+    return new_header;
+}
+
 static inline void* RLPP_FUNC(_default_alloc)(uint64_t size, void* user) {
     return malloc(size);
 }
@@ -275,14 +308,13 @@ RLPPDEF rlpp_id_t RLPP_FUNC(_get_new_id)(void* pool) {
 
     uint32_t new_map_index = header->next_free_map_index;
     rlpp_mapping_t* mapping = &header->map_list[new_map_index];
-    if(!mapping->has_child || mapping->free == RLPP_FALSE) {
+    if(mapping->free == RLPP_FALSE) {
         return RLPP_NULL;
     }
     uint32_t new_array_index = header->length - 1;
     header->next_free_map_index = mapping->child;
     header->map_list[new_array_index].map_index = new_map_index;
     mapping->child = 0;
-    mapping->has_child = RLPP_FALSE;
     mapping->generation++;
     mapping->array_index = new_array_index;
     mapping->free = RLPP_FALSE;
@@ -306,7 +338,6 @@ RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id) {
     }
     uint32_t last_array_index = header->length - 1;
     mapping->free = RLPP_TRUE;
-    mapping->has_child = RLPP_TRUE;
     mapping->child = header->next_free_map_index;
     header->next_free_map_index = map_index;
     header->length--;
@@ -344,52 +375,20 @@ RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_
             RLPP_FUNC(_default_allocator).free(new_header, total_size, NULL);
             return RLPP_FALSE;
         }
-        for(uint64_t i = 0; i < new_capacity; i++) {
-            new_header->map_list[i] = (rlpp_mapping_t) {
-                .free = RLPP_TRUE,
-                .generation = 0,
-                .array_index = 0,
-                .has_child = RLPP_TRUE,
-                .child = i + 1,
-            };
-        }
 
-        memcpy(&new_header->allocator, &RLPP_FUNC(_default_allocator), sizeof(rlpp_allocator_t));
+        new_header->allocator = RLPP_FUNC(_default_allocator);
         new_header->capacity = new_capacity;
         new_header->length = 0;
-        new_header->next_free_map_index = 0;
         new_header->element_size = element_size;
         new_header->size_is_fixed = RLPP_FALSE;
+        new_header->next_free_map_index = UINT32_MAX;
+        RLPP_FUNC(_initialize_new_map_list_entries)(new_header, new_header->map_list, 0, new_capacity);
         (*pool_ptr) = rlpp__header_to_pool(new_header);
     } else {
-        rlpp_header_t* old_header = rlpp__header(pool);
-        rlpp_allocator_t allocator = old_header->allocator;
-        uint64_t old_mapping_size = old_header->capacity * sizeof(rlpp_mapping_t);
-        uint64_t old_size = sizeof(rlpp_header_t) + (old_header->capacity * old_header->element_size);
-
-        rlpp_mapping_t* new_map_list = allocator.realloc(old_header->map_list, old_mapping_size, mapping_size, allocator.user);
-        if(!new_map_list) {
-            return RLPP_FALSE;
-        }
-        old_header->map_list = new_map_list;
-
-        rlpp_header_t* new_header = allocator.realloc(old_header, old_size, total_size, allocator.user);
+        rlpp_header_t* new_header = RLPP_FUNC(_reallocate)(rlpp__header(pool), new_capacity);
         if(!new_header) {
             return RLPP_FALSE;
         }
-        
-        for(uint64_t i = new_header->capacity; i < new_capacity; i++) {
-            new_header->map_list[i] = (rlpp_mapping_t) {
-                .free = RLPP_TRUE,
-                .generation = 0,
-                .array_index = 0,
-                .map_index = 0,
-                .has_child = RLPP_TRUE,
-                .child = new_header->next_free_map_index,
-            };
-            new_header->next_free_map_index = i;
-        }
-        new_header->capacity = new_capacity;
         (*pool_ptr) = rlpp__header_to_pool(new_header);
     }
 
@@ -413,25 +412,14 @@ RLPPDEF uint8_t RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint
         goto err;
     }
 
-    memcpy(&header->allocator, allocator, sizeof(rlpp_allocator_t));
+    header->allocator = (*allocator);
     header->capacity = capacity;
     header->size_is_fixed = custom_capacity != 0;
     header->length = 0;
     header->map_list = mapping;
     header->element_size = element_size;
-    header->next_free_map_index = 0;
-    
-    for(uint64_t i = 0; i < capacity; i++) {
-        header->map_list[i] = (rlpp_mapping_t) {
-            .free = RLPP_TRUE,
-            .generation = 0,
-            .array_index = 0,
-            .map_index = 0,
-            .has_child = RLPP_TRUE,
-            .child = i + 1,
-        };
-    }
-
+    header->next_free_map_index = UINT32_MAX;
+    RLPP_FUNC(_initialize_new_map_list_entries)(header, mapping, 0, capacity);
     (*pool) = rlpp__header_to_pool(header);
     return RLPP_TRUE;
 err:
