@@ -230,9 +230,6 @@ static inline void* RLPP_FUNC(_get)(void* pool, rlpp_id_t id) {
 }
 
 static inline void* RLPP_FUNC(_get_fast)(void* pool, rlpp_id_t id) {
-    if(id == RLPP_NULL) {
-        return NULL;
-    }
     rlpp_header_t* header = rlpp__header(pool);
     uint32_t map_index = rlpp__id_index(id);
     uint32_t generation = rlpp__id_gen(id);
