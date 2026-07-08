@@ -179,13 +179,14 @@
     ((uint32_t)(((ID) >> 32) & 0xFFFFFFFF))
 
 typedef uint64_t rlpp_id_t;
+typedef uint8_t rlpp_bool_t;
 
 typedef struct rlpp_mapping_t {
     uint32_t generation;
     uint32_t array_index;
     uint32_t map_index;
     uint32_t child;
-    uint8_t free;
+    rlpp_bool_t free;
 } rlpp_mapping_t;
 
 typedef struct rlpp_allocator_t {
@@ -202,13 +203,12 @@ typedef struct rlpp_header_t {
     uint32_t capacity;
     uint32_t length;
     uint32_t element_size;
-    uint8_t size_is_fixed; //if this is true no reallocations will be made and the capacity won't change
+    rlpp_bool_t size_is_fixed; //if this is true no reallocations will be made and the capacity won't change
 } rlpp_header_t;
 
 RLPPDEF rlpp_id_t RLPP_FUNC(_get_new_id)(void* pool);
 RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id);
-RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool, uint64_t element_size, uint32_t needed_entries);
-RLPPDEF uint8_t RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_t capacity, rlpp_allocator_t* allocator);
+RLPPDEF rlpp_bool_t RLPP_FUNC(_grow)(void** pool, uint64_t element_size, uint32_t needed_entries);
 RLPPDEF void RLPP_FUNC(_free)(void* pool);
 
 static inline void* RLPP_FUNC(_get)(void* pool, rlpp_id_t id) {
@@ -387,7 +387,7 @@ RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id) {
     swap_map->array_index = mapping->array_index;
 }
 
-RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_t needed_entries) {
+RLPPDEF rlpp_bool_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_t needed_entries) {
     void* pool = *pool_ptr;
     if(pool ? rlpp__header(pool)->size_is_fixed : 0) {
         return RLPP_FALSE;
