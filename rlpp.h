@@ -160,8 +160,8 @@
 #define rlpp_free(POOL) \
     RLPP_FUNC(_free)((POOL))
 
-#define rlpp_init_custom(POOL, CAPACITY, ALLOCATOR) \
-    RLPP_FUNC(_init_custom)((void**)&(POOL), sizeof(*(POOL)), (CAPACITY), (ALLOCATOR))
+#define rlpp_init_custom(POOL, CUSTOM_CAP, CUSTOM_ALLOC) \
+    (POOL) = rlpp__header_to_pool(rlpp__init((CUSTOM_ALLOC), (CUSTOM_CAP), sizeof(*(POOL))))
 
 #define rlpp__header(POOL) \
     ((rlpp_header_t*)(POOL) - 1)
@@ -262,13 +262,6 @@ static inline void* rlpp__default_realloc(void *old_pointer, uint64_t old_size, 
     return realloc(old_pointer, new_size);
 }
 
-static rlpp_allocator_t rlpp__default_allocator = {
-    .user = NULL,
-    .alloc = &rlpp__default_alloc,
-    .free = &rlpp__default_free,
-    .realloc = &rlpp__default_realloc,
-};
-
 static inline void rlpp__initialize_new_map_list_entries(rlpp_header_t* header, rlpp_mapping_t* map_list, uint32_t start_index, uint32_t end_index) {
     for(uint32_t i = start_index; i < end_index; i++) {
         map_list[i] = (rlpp_mapping_t){
@@ -280,6 +273,50 @@ static inline void rlpp__initialize_new_map_list_entries(rlpp_header_t* header, 
         };
         header->next_free_map_index = i;
     }
+}
+
+static inline rlpp_header_t* rlpp__init(rlpp_allocator_t* custom_allocator, uint32_t custom_cap, uint64_t element_size) {
+    rlpp_header_t* header = NULL;
+    rlpp_mapping_t* map_list = NULL;
+
+    static rlpp_allocator_t default_allocator = {
+        .user = NULL,
+        .alloc = &rlpp__default_alloc,
+        .free = &rlpp__default_free,
+        .realloc = &rlpp__default_realloc,
+    };
+
+    rlpp_allocator_t* allocator = custom_allocator ? custom_allocator : &default_allocator;
+    uint64_t capacity = custom_cap == 0 ? RLPP_DEFAULT_CAPACITY : custom_cap;
+    uint64_t size = sizeof(rlpp_header_t) + (capacity * element_size);
+    uint64_t map_size = sizeof(rlpp_mapping_t) * capacity;
+
+    header = allocator->alloc(size, allocator->user);
+    if(!header) {
+        goto err;
+    }
+    map_list = allocator->alloc(map_size, allocator->user);
+    if(!map_list) {
+        goto err;
+    }
+
+    header->allocator = (*allocator);
+    header->capacity = capacity;
+    header->size_is_fixed = custom_cap != 0;
+    header->length = 0;
+    header->map_list = map_list;
+    header->element_size = element_size;
+    header->next_free_map_index = UINT32_MAX;
+    rlpp__initialize_new_map_list_entries(header, map_list, 0, capacity);
+    return header;
+err:
+    if(header) {
+        allocator->free(header, size, allocator->user);
+    }
+    if(map_list) {
+        allocator->free(map_list, map_size, allocator->user);
+    }
+    return NULL;
 }
 
 static inline rlpp_header_t* rlpp__resize(rlpp_header_t* header, uint32_t new_cap) {
@@ -362,27 +399,11 @@ RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_
         new_capacity *= 2;
     }
 
-    uint64_t total_size = sizeof(rlpp_header_t) + (element_size * new_capacity);
-    uint64_t mapping_size = new_capacity * sizeof(rlpp_mapping_t);
-
     if(!pool) {
-        rlpp_header_t* new_header = rlpp__default_allocator.alloc(total_size, NULL);
+        rlpp_header_t* new_header = rlpp__init(NULL, 0, element_size);
         if(!new_header) {
             return RLPP_FALSE;
         }
-        new_header->map_list = rlpp__default_allocator.alloc(mapping_size, NULL);
-        if(!new_header->map_list) {
-            rlpp__default_allocator.free(new_header, total_size, NULL);
-            return RLPP_FALSE;
-        }
-
-        new_header->allocator = rlpp__default_allocator;
-        new_header->capacity = new_capacity;
-        new_header->length = 0;
-        new_header->element_size = element_size;
-        new_header->size_is_fixed = RLPP_FALSE;
-        new_header->next_free_map_index = UINT32_MAX;
-        rlpp__initialize_new_map_list_entries(new_header, new_header->map_list, 0, new_capacity);
         (*pool_ptr) = rlpp__header_to_pool(new_header);
     } else {
         rlpp_header_t* new_header = rlpp__resize(rlpp__header(pool), new_capacity);
@@ -393,44 +414,6 @@ RLPPDEF uint8_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_
     }
 
     return RLPP_TRUE;
-}
-
-RLPPDEF uint8_t RLPP_FUNC(_init_custom)(void** pool, uint64_t element_size, uint64_t custom_capacity, rlpp_allocator_t* custom_allocator) {
-    rlpp_allocator_t* allocator = custom_allocator ? custom_allocator : &rlpp__default_allocator;
-    rlpp_header_t* header = NULL;
-    rlpp_mapping_t* mapping = NULL;
-    uint64_t capacity = custom_capacity == 0 ? RLPP_DEFAULT_CAPACITY : custom_capacity;
-    uint64_t header_allocation_size = sizeof(rlpp_header_t) + (capacity * element_size);
-    uint64_t mapping_allocation_size = sizeof(rlpp_mapping_t) * capacity;
-
-    header = allocator->alloc(header_allocation_size, allocator->user);
-    if(!header) {
-        goto err;
-    }
-    mapping = allocator->alloc(mapping_allocation_size, allocator->user);
-    if(!mapping) {
-        goto err;
-    }
-
-    header->allocator = (*allocator);
-    header->capacity = capacity;
-    header->size_is_fixed = custom_capacity != 0;
-    header->length = 0;
-    header->map_list = mapping;
-    header->element_size = element_size;
-    header->next_free_map_index = UINT32_MAX;
-    rlpp__initialize_new_map_list_entries(header, mapping, 0, capacity);
-    (*pool) = rlpp__header_to_pool(header);
-    return RLPP_TRUE;
-err:
-    if(header) {
-        allocator->free(header, header_allocation_size, allocator->user);
-    }
-    if(mapping) {
-        allocator->free(mapping, mapping_allocation_size, allocator->user);
-    }
-    (*pool) = NULL;
-    return RLPP_FALSE;
 }
 
 RLPPDEF void RLPP_FUNC(_free)(void* pool) {
