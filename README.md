@@ -1,6 +1,35 @@
 # 📦 rlpp - RL Packed Pool
 A tightly packed data structure accesible with stable id handles written with cache friendliness in mind. It is a single header file library written in C.
 
+## How to Use
+In one source file, include the header file with the implementation define to compile the function definitions.
+```C
+#define RLPP_IMPLEMENTATION
+#include <rlpp.h>
+```
+Then in any other source files, include it normally.
+```C
+#include <rlpp.h>
+```
+There are also two ways to combat symbol collision when using this library.
+```C
+/*
+    make functions static. this only
+    needs to be declared together with
+    the RLPP_IMPLEMENTATION define
+*/
+#define RLPP_STATIC
+
+/*
+    if the library needs to be used
+    from multiple translation units,
+    a prefix can be used instead.
+    this however, needs to be declared
+    in every file that includes rlpp.h
+*/
+#define RLPP_PREFIX custom_prefix
+```
+
 ## Basic Examples
 To create a new pool, simply set a pointer type to null. Any mutation to the pool will automatically allocate and set the pointer behind the scenes.
 ```C
@@ -58,13 +87,13 @@ To remove an entry do the following. This will add the id's slot index to a free
 ```C
 rlpp_remove(pool, id);
 ```
-Since the array is contiguous it is very easy to loop through the entries. Keep in mind that the index of the array is not the same as the id that is returned from the rlpp_alloc function
+Since the array is contiguous it is very easy to loop through the entries. Keep in mind that the index of the array is not the same as the id that is returned from the rlpp_alloc function.
 ```C
 for(uint32_t i = 0; i < rlpp_len(pool); i++) {
     my_type_t* entry = &pool[i];
 }
 ```
-To free the pool do the following:
+To free the pool do the following.
 ```C
 rlpp_free(pool);
 ```
