@@ -118,12 +118,12 @@ int32_t main() {
         some code that fills the components
     */
 
-    rlpp_qsort(components, sort_func);
+    rlpp_sort(components, sort_func);
     return 0;
 }
 ```
-There is a static assert inside the rlpp_qsort macro that checks if the size of the
-pool type can fit inside the internal swap buffer size. If it doesn't fit, a compile time error will be fired. To combat this, the RLPP_SWAP_BUFFER_SIZE can be changed from the default 256. Keep in mind that this needs to be done on every include, and not only on the implementation include.
+There is a static assert inside the `rlpp_sort` macro that checks if the size of the
+pool type can fit inside the internal swap buffer size. If it doesn't fit, a compile time error will be fired. To combat this, the `RLPP_SWAP_BUFFER_SIZE` can be changed from the default `256`. Keep in mind that this needs to be done on every include, and not only on the implementation include.
 ```C
 #define RLPP_SWAP_BUFFER_SIZE 512
 #include <rlpp.h>

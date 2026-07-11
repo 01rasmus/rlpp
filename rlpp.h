@@ -161,10 +161,10 @@
 #define rlpp_cap(POOL) \
     ((POOL) ? (rlpp__header(POOL)->capacity) : 0)
 
-#define rlpp_qsort(POOL, SORT_FUNCTION) \
+#define rlpp_sort(POOL, SORT_FUNCTION) \
     do { \
         _Static_assert(sizeof(*(POOL)) <= RLPP_SWAP_BUFFER_SIZE, "RLPP_SWAP_BUFFER_SIZE is too small for this pool type. define a larger value for the RLPP_SWAP_BUFFER_SIZE macro"); \
-        RLPP_FUNC(_qsort)((POOL), (SORT_FUNCTION)); \
+        RLPP_FUNC(_sort)((POOL), (SORT_FUNCTION)); \
     } while(0);
 
 #define rlpp_free(POOL) \
@@ -222,7 +222,7 @@ RLPPDEF rlpp_id_t RLPP_FUNC(_get_new_id)(void* pool);
 RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id);
 RLPPDEF rlpp_bool_t RLPP_FUNC(_grow)(void** pool, uint64_t element_size, uint32_t needed_entries);
 RLPPDEF void RLPP_FUNC(_free)(void* pool);
-RLPPDEF void RLPP_FUNC(_qsort)(void* pool, rlpp_compare_callback_t sort_function);
+RLPPDEF void RLPP_FUNC(_sort)(void* pool, rlpp_compare_callback_t sort_function);
 
 static inline void* RLPP_FUNC(_get)(void* pool, rlpp_id_t id) {
     if(!pool || id == RLPP_NULL) {
@@ -447,7 +447,7 @@ static inline void rlpp_swap_array_indices(void* raw, uint32_t a_index, uint32_t
 }
 
 //todo: use a faster sorting algorithm
-RLPPDEF void RLPP_FUNC(_qsort)(void* pool, rlpp_compare_callback_t sort_function) {
+RLPPDEF void RLPP_FUNC(_sort)(void* pool, rlpp_compare_callback_t sort_function) {
     if(!pool) {
         return;
     }
