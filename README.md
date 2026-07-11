@@ -98,6 +98,37 @@ To free the pool do the following.
 rlpp_free(pool);
 ```
 
+## Sorting the Pool
+Since the pool keeps a map of the ids internally, simply using qsort from the standard library won't work. Therefore there is a function called `rlpp_qsort` that should be used instead
+```C
+typedef struct comp_t {
+    char str[64];
+} comp_t;
+
+static int32_t sort_func(const char* a, const char* b) {
+    const comp_t* comp_a = (const compt_t*)a;
+    const comp_t* comp_b = (const compt_t*)b;
+    return strcmp(comp_a->str, comp_b->str);
+}
+
+int32_t main() {
+    comp_t* components;
+
+    /*
+        some code that fills the components
+    */
+
+    rlpp_qsort(components, sort_func);
+    return 0;
+}
+```
+There is a static assert inside the rlpp_qsort macro that checks if the size of the
+pool type can fit inside the internal swap buffer size. If it doesn't fit, a compile time error will be fired. To combat this, the RLPP_SWAP_BUFFER_SIZE can be changed from the default 256. Keep in mind that this needs to be done on every include, and not only on the implementation include.
+```C
+#define RLPP_SWAP_BUFFER_SIZE 512
+#include <rlpp.h>
+```
+
 ## Custom Allocators
 As default, the standard lib's malloc, realloc and free are used to manage the memory behind the scenes. But custom functions can be overriden.
 ```C
