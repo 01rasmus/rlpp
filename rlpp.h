@@ -257,10 +257,17 @@ static inline void* RLPP_FUNC(_get_fast)(void* pool, rlpp_id_t id) {
 #endif /* RLPP_INCLUDE_H */
 
 #ifdef RLPP_IMPLEMENTATION
+#include <stddef.h>
 #include <string.h>
-#define RLPP_DEFAULT_CAPACITY   16
+#define RLPP_DEFAULT_CAPACITY           16
+#define RLPP_QUICK_SORT_LEN_THRESHOLD   16
 
 _Static_assert(RLPP_SWAP_BUFFER_SIZE > 0, "RLPP_SWAP_BUFFER_SIZE must be greated than 0");
+
+typedef union rlpp__aligned_sort_buffer_t {
+    max_align_t _;
+    uint8_t bytes[RLPP_SWAP_BUFFER_SIZE];
+} rlpp__aligned_sort_buffer_t;
 
 static inline void* rlpp__default_alloc(uint64_t size, void* user) {
     return malloc(size);
@@ -428,17 +435,16 @@ RLPPDEF rlpp_bool_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uin
     return RLPP_TRUE;
 }
 
-static inline void rlpp_swap_array_indices(void* raw, uint32_t a_index, uint32_t b_index) {
-    uint8_t temp[RLPP_SWAP_BUFFER_SIZE];
-    rlpp_header_t* header = rlpp__header(raw);
-    uint8_t* pool = (uint8_t*)raw;
+static inline void rlpp__swap_array_indices(uint8_t* data, uint32_t a_index, uint32_t b_index) {
+    rlpp__aligned_sort_buffer_t temp;
+    rlpp_header_t* header = rlpp__header(data);
 
     uint32_t a_id = header->map_list[a_index].map_index;
     uint32_t b_id = header->map_list[b_index].map_index;
 
-    memcpy(temp, pool + a_index * header->element_size, header->element_size);
-    memcpy(pool + a_index * header->element_size, pool + b_index * header->element_size, header->element_size);
-    memcpy(pool + b_index * header->element_size, temp, header->element_size);
+    memcpy(temp.bytes, data + a_index * header->element_size, header->element_size);
+    memcpy(data + a_index * header->element_size, data + b_index * header->element_size, header->element_size);
+    memcpy(data + b_index * header->element_size, temp.bytes, header->element_size);
 
     header->map_list[a_index].map_index = b_id;
     header->map_list[b_index].map_index = a_id;
@@ -446,15 +452,7 @@ static inline void rlpp_swap_array_indices(void* raw, uint32_t a_index, uint32_t
     header->map_list[b_id].array_index = a_index;
 }
 
-//todo: use a faster sorting algorithm
-RLPPDEF void RLPP_FUNC(_sort)(void* pool, rlpp_compare_callback_t sort_function) {
-    if(!pool) {
-        return;
-    }
-
-    rlpp_header_t* header = rlpp__header(pool);
-    uint8_t* data = pool;
-
+static void rlpp__insertion_sort(rlpp_header_t* header, rlpp_compare_callback_t sort_function, uint8_t* data) {
     for(uint32_t i = 1; i < header->length; i++) {
         uint32_t j = i;
 
@@ -466,9 +464,79 @@ RLPPDEF void RLPP_FUNC(_sort)(void* pool, rlpp_compare_callback_t sort_function)
                 break;
             }
 
-            rlpp_swap_array_indices(pool, j - 1, j);
+            rlpp__swap_array_indices(data, j - 1, j);
             j--;
         }
+    }
+}
+
+static inline void* rlpp__median_of_three(void* a, void* b, void* c, rlpp_compare_callback_t sort_function) {
+    if(sort_function(a, b) < 0) {
+        if(sort_function(b, c) < 0) {
+            return b;
+        }
+        if(sort_function(a, c) < 0) {
+            return c;
+        }
+        return a;
+    }
+
+    if(sort_function(a, c) < 0) {
+        return a;
+    }
+    if(sort_function(b, c) < 0) {
+        return c;
+    }
+    return b;
+}
+
+static inline int64_t rlpp__quick_sort_partition(rlpp_header_t* header, rlpp_compare_callback_t sort_function, uint8_t* data, int64_t low, int64_t high) {
+    int64_t middle = (low + (high - low) / 2);
+    uint8_t* a = data + low * header->element_size;
+    uint8_t* b = data + middle * header->element_size;
+    uint8_t* c = data + high * header->element_size;
+
+    rlpp__aligned_sort_buffer_t pivot;
+    memcpy(pivot.bytes, rlpp__median_of_three(a, b, c, sort_function), header->element_size);
+
+    int64_t i = low - 1;
+
+    for(int64_t j = low; j <= high - 1; j++) {
+        uint8_t* curr = data + header->element_size * j;
+        if(sort_function(curr, pivot.bytes) <= 0) {
+            i++;
+            rlpp__swap_array_indices(data, i, j);
+        }
+    }
+
+    rlpp__swap_array_indices(data, i + 1, high);
+    return i + 1;
+}
+
+static void rlpp__quick_sort(rlpp_header_t* header, rlpp_compare_callback_t sort_function, uint8_t* data, int64_t low, int64_t high) {
+    if(low < high) {
+        int64_t partition_index = rlpp__quick_sort_partition(header, sort_function, data, low, high);
+        rlpp__quick_sort(header, sort_function, data, low, partition_index - 1);
+        rlpp__quick_sort(header, sort_function, data, partition_index + 1, high);
+    }
+}
+
+RLPPDEF void RLPP_FUNC(_sort)(void* pool, rlpp_compare_callback_t sort_function) {
+    if(!pool) {
+        return;
+    }
+
+    rlpp_header_t* header = rlpp__header(pool);
+    uint8_t* data = pool;
+
+    if(header->length == 0) {
+        return;
+    }
+
+    if(header->length <= RLPP_QUICK_SORT_LEN_THRESHOLD) {
+        rlpp__insertion_sort(header, sort_function, data);
+    } else {
+        rlpp__quick_sort(header, sort_function, data, 0, header->length - 1);
     }
 }
 
