@@ -123,9 +123,9 @@ int32_t main() {
 }
 ```
 There is a static assert inside the `rlpp_sort` macro that checks if the size of the
-pool type can fit inside the internal swap buffer size. If it doesn't fit, a compile time error will be fired. To combat this, the `RLPP_SWAP_BUFFER_SIZE` can be changed from the default `256`. Keep in mind that this needs to be done on every include, and not only on the implementation include.
+pool type can fit inside the internal sort buffer size. If it doesn't fit, a compile time error will be fired. To combat this, the `RLPP_SORT_BUFFER_SIZE` can be changed from the default `256`. Keep in mind that this needs to be done on every include, and not only on the implementation include.
 ```C
-#define RLPP_SWAP_BUFFER_SIZE 512
+#define RLPP_SORT_BUFFER_SIZE 512
 #include <rlpp.h>
 ```
 

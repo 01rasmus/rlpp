@@ -126,8 +126,8 @@
 #define RLPP_PREFIX rlpp_
 #endif
 
-#ifndef RLPP_SWAP_BUFFER_SIZE
-#define RLPP_SWAP_BUFFER_SIZE 256
+#ifndef RLPP_SORT_BUFFER_SIZE
+#define RLPP_SORT_BUFFER_SIZE 256
 #endif
 
 #define RLPP_CONCAT(PREFIX, NAME)               PREFIX##NAME
@@ -164,7 +164,7 @@
 
 #define rlpp_sort(POOL, SORT_FUNCTION) \
     do { \
-        _Static_assert(sizeof(*(POOL)) <= RLPP_SWAP_BUFFER_SIZE, "RLPP_SWAP_BUFFER_SIZE is too small for this pool type. define a larger value for the RLPP_SWAP_BUFFER_SIZE macro"); \
+        _Static_assert(sizeof(*(POOL)) <= RLPP_SORT_BUFFER_SIZE, "RLPP_SORT_BUFFER_SIZE is too small for this pool type. define a larger value for the RLPP_SORT_BUFFER_SIZE macro"); \
         RLPP_FUNC(_sort)((POOL), (SORT_FUNCTION)); \
     } while(0);
 
@@ -266,11 +266,11 @@ static inline void* RLPP_FUNC(_get_fast)(void* pool, rlpp_id_t id) {
 #define RLPP_DEFAULT_CAPACITY           16
 #define RLPP_QUICK_SORT_LEN_THRESHOLD   16
 
-_Static_assert(RLPP_SWAP_BUFFER_SIZE > 0, "RLPP_SWAP_BUFFER_SIZE must be greated than 0");
+_Static_assert(RLPP_SORT_BUFFER_SIZE > 0, "RLPP_SORT_BUFFER_SIZE must be greated than 0");
 
 typedef union rlpp__aligned_sort_buffer_t {
     max_align_t _;
-    uint8_t bytes[RLPP_SWAP_BUFFER_SIZE];
+    uint8_t bytes[RLPP_SORT_BUFFER_SIZE];
 } rlpp__aligned_sort_buffer_t;
 
 static inline void* rlpp__default_alloc(uint64_t size, void* user) {
