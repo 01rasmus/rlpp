@@ -110,6 +110,7 @@
 #ifndef RLPP_INCLUDE_H
 #define RLPP_INCLUDE_H
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -208,14 +209,17 @@ typedef struct rlpp_allocator_t {
     void* user;
 } rlpp_allocator_t;
 
-typedef struct rlpp_header_t {
-    rlpp_allocator_t allocator;
-    rlpp_mapping_t* map_list;
-    uint32_t next_free_map_index;
-    uint32_t capacity;
-    uint32_t length;
-    uint32_t element_size;
-    rlpp_bool_t size_is_fixed; //if this is true no reallocations will be made and the capacity won't change
+typedef union rlpp_header_t {
+    struct {
+        rlpp_allocator_t allocator;
+        rlpp_mapping_t* map_list;
+        uint32_t next_free_map_index;
+        uint32_t capacity;
+        uint32_t length;
+        uint32_t element_size;
+        rlpp_bool_t size_is_fixed; //if this is true no reallocations will be made and the capacity won't change
+    };
+    max_align_t _;
 } rlpp_header_t;
 
 RLPPDEF rlpp_id_t RLPP_FUNC(_get_new_id)(void* pool);
