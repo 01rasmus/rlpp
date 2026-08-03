@@ -141,6 +141,9 @@
 #define rlpp_alloc(POOL, VALUE) \
     ((rlpp__maybe_grow((POOL), 1)) ? ((POOL)[rlpp__header(POOL)->length++] = (VALUE), RLPP_FUNC(_get_new_id)((POOL))) : RLPP_NULL)
 
+#define rlpp_alloc_to_ref(POOL, VALUE) \
+    rlpp_ref((POOL), rlpp_alloc((POOL), (VALUE)))
+
 #define rlpp_get(POOL, ID) \
     RLPP_FUNC(_get)((POOL), (ID))
 
@@ -150,11 +153,20 @@
 #define rlpp_get_unchecked(POOL, ID) \
     (&(POOL)[rlpp__header((POOL))->map_list[(uint32_t)(((ID) & 0xFFFFFFFF) - 1)].array_index])
 
+#define rlpp_deref(POOL, REF) \
+    RLPP_FUNC(_deref)((POOL), &(REF))
+
+#define rlpp_ref(POOL, ID) \
+    RLPP_FUNC(_ref)((POOL), (ID))
+
 #define rlpp_exists(POOL, ID) \
     (RLPP_FUNC(_get)((POOL), (ID)) != NULL)
 
 #define rlpp_remove(POOL, ID) \
     RLPP_FUNC(_remove)((POOL), (ID))
+
+#define rlpp_remove_by_ref(POOL, REF) \
+    rlpp_remove((POOL), (REF).id)
 
 #define rlpp_len(POOL) \
     ((POOL) ? (rlpp__header(POOL)->length) : 0)
@@ -194,6 +206,15 @@ typedef uint8_t rlpp_bool_t;
 
 typedef int32_t (*rlpp_compare_callback_t)(const void* a, const void* b);
 
+typedef union rlpp_ref_t {
+    struct {
+        uint64_t epoch;
+        rlpp_id_t id;
+        void* ptr;
+    };
+    max_align_t _;
+} rlpp_ref_t;
+
 typedef struct rlpp_mapping_t {
     uint32_t generation;
     uint32_t array_index;
@@ -213,6 +234,7 @@ typedef union rlpp_header_t {
     struct {
         rlpp_allocator_t allocator;
         rlpp_mapping_t* map_list;
+        uint64_t epoch; //increases whenever memory is moved (on delswaps or reallocations)
         uint32_t next_free_map_index;
         uint32_t capacity;
         uint32_t length;
@@ -256,6 +278,24 @@ static inline void* RLPP_FUNC(_get_fast)(void* pool, rlpp_id_t id) {
     }
     uint8_t* ptr = ((uint8_t*)pool) + mapping->array_index * header->element_size;
     return (void*)ptr;
+}
+
+static inline rlpp_ref_t RLPP_FUNC(_ref)(void* pool, rlpp_id_t id) {
+    rlpp_header_t* header = rlpp__header(pool);
+    return (rlpp_ref_t){
+        .epoch = header->epoch,
+        .id = id,
+        .ptr = rlpp_get(pool, id),
+    };
+}
+
+static inline void* RLPP_FUNC(_deref)(void* pool, rlpp_ref_t* ref) {
+    rlpp_header_t* header = rlpp__header(pool);
+    if(header->epoch != ref->epoch) {
+        ref->epoch = header->epoch;
+        ref->ptr = rlpp_get(pool, ref->id);
+    }
+    return ref->ptr;
 }
 
 #endif /* RLPP_INCLUDE_H */
@@ -330,6 +370,7 @@ static inline rlpp_header_t* rlpp__init(rlpp_allocator_t* custom_allocator, uint
     header->map_list = map_list;
     header->element_size = element_size;
     header->next_free_map_index = UINT32_MAX;
+    header->epoch = 0;
     rlpp__initialize_new_map_list_entries(header, map_list, 0, capacity);
     return header;
 err:
@@ -358,6 +399,11 @@ static inline rlpp_header_t* rlpp__resize(rlpp_header_t* header, uint32_t new_ca
         return NULL;
     }
     
+    //only need to change the epoch if the memory was actually moved
+    if(new_header != header) {
+        new_header->epoch++;
+    }
+
     new_header->capacity = new_cap;
     rlpp__initialize_new_map_list_entries(new_header, new_map_list, old_cap, new_cap);
     return new_header;
@@ -442,6 +488,7 @@ RLPPDEF rlpp_bool_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uin
 static inline void rlpp__swap_array_indices(uint8_t* data, uint32_t a_index, uint32_t b_index) {
     rlpp__aligned_sort_buffer_t temp;
     rlpp_header_t* header = rlpp__header(data);
+    header->epoch++;
 
     uint32_t a_id = header->map_list[a_index].map_index;
     uint32_t b_id = header->map_list[b_index].map_index;

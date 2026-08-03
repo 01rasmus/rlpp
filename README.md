@@ -98,6 +98,53 @@ To free the pool do the following.
 rlpp_free(pool);
 ```
 
+Instead of using the handles as is, there are also cached references. These references uses the raw pointers for more direct data access. Whenever the data structure moves the references becomes invalid, and only then will it refetch the pointer. This makes a reference safer than the rlpp_get_unchecked but is also a good alternative if speed is necessary. The cached references works best whenenver the datas tructure doesn't delete or reallocates a lot of entries.
+
+```C
+my_type_t data = {
+    .a = 1.0,
+};
+
+my_type_t data2 = {
+    .a = 2.0,
+};
+
+/* 
+    allocating and returing the ref instead of
+    an id
+*/
+rlpp_ref_t ref = rlpp_alloc_by_ref(pool, data);
+
+/*
+    the same logic above can be done
+    by doing the following:
+*/
+rlpp_id_t id = rlpp_alloc(pool, data2);
+rlpp_ref_t ref2 = rlpp_ref(pool, id);
+
+/*
+    to deref the reference, and get
+    the raw ptr, use the `rlpp_deref`
+    function. if the data that it points
+    to has been removed the ptr will be null
+*/
+my_type_t* ptr = rlpp_deref(pool, ref);
+
+/*
+    to remove an entry by ref
+*/
+rlpp_remove_by_ref(pool, ref);
+
+/*
+    removing the data pointed to
+    an id will make the ref that
+    was constructed from the same id
+    return NULL on a dereference
+*/
+rlpp_remove(pool, id);
+my_type_t* should_be_null = rlpp_deref(pool, ref2); //will be NULL
+```
+
 ## Sorting the Pool
 Since the pool keeps a map of the ids internally, simply using qsort from the standard library won't work. Therefore there is a function called `rlpp_qsort` that should be used instead
 ```C
