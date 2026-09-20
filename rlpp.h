@@ -544,11 +544,21 @@ static inline int64_t rlpp__quick_sort_partition(rlpp_header_t* header, rlpp_com
     uint8_t* b = data + middle * header->element_size;
     uint8_t* c = data + high * header->element_size;
 
+    int64_t pivot_index;
+    void* selected = rlpp__median_of_three(a, b, c, sort_function);
+    if(selected == a) {
+        pivot_index = low;
+    } else if(selected == b) {
+        pivot_index = middle;
+    } else {
+        pivot_index = high;
+    }
+
     rlpp__aligned_sort_buffer_t pivot;
-    memcpy(pivot.bytes, rlpp__median_of_three(a, b, c, sort_function), header->element_size);
+    memcpy(pivot.bytes, selected, header->element_size);
+    rlpp__swap_array_indices(data, pivot_index, high);
 
     int64_t i = low - 1;
-
     for(int64_t j = low; j <= high - 1; j++) {
         uint8_t* curr = data + header->element_size * j;
         if(sort_function(curr, pivot.bytes) <= 0) {
