@@ -338,6 +338,24 @@ static inline void rlpp__initialize_new_map_list_entries(rlpp_header_t* header, 
     }
 }
 
+static inline void rlpp__swap_array_indices(uint8_t* data, uint32_t a_index, uint32_t b_index) {
+    rlpp__aligned_sort_buffer_t temp;
+    rlpp_header_t* header = rlpp__header(data);
+    header->epoch++;
+
+    uint32_t a_id = header->map_list[a_index].map_index;
+    uint32_t b_id = header->map_list[b_index].map_index;
+
+    memcpy(temp.bytes, data + a_index * header->element_size, header->element_size);
+    memcpy(data + a_index * header->element_size, data + b_index * header->element_size, header->element_size);
+    memcpy(data + b_index * header->element_size, temp.bytes, header->element_size);
+
+    header->map_list[a_index].map_index = b_id;
+    header->map_list[b_index].map_index = a_id;
+    header->map_list[a_id].array_index = b_index;
+    header->map_list[b_id].array_index = a_index;
+}
+
 static inline rlpp_header_t* rlpp__init(rlpp_allocator_t* custom_allocator, uint32_t custom_cap, uint64_t element_size) {
     rlpp_header_t* header = NULL;
     rlpp_mapping_t* map_list = NULL;
@@ -443,17 +461,14 @@ RLPPDEF void RLPP_FUNC(_remove)(void* pool, rlpp_id_t id) {
         return;
     }
     uint32_t last_array_index = header->length - 1;
+    if(mapping->array_index != last_array_index) {
+        rlpp__swap_array_indices(pool, mapping->array_index, last_array_index);
+    }
+
     mapping->free = RLPP_TRUE;
     mapping->child = header->next_free_map_index;
     header->next_free_map_index = map_index;
     header->length--;
-    if(mapping->array_index == last_array_index) {
-        return;
-    }
-    memcpy((uint8_t*)pool + (mapping->array_index * header->element_size), (uint8_t*)pool + (last_array_index * header->element_size), header->element_size);
-    uint32_t swap_map_index = header->map_list[last_array_index].map_index;
-    rlpp_mapping_t* swap_map = &header->map_list[swap_map_index];
-    swap_map->array_index = mapping->array_index;
 }
 
 RLPPDEF rlpp_bool_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uint32_t needed_entries) {
@@ -483,24 +498,6 @@ RLPPDEF rlpp_bool_t RLPP_FUNC(_grow)(void** pool_ptr, uint64_t element_size, uin
     }
 
     return RLPP_TRUE;
-}
-
-static inline void rlpp__swap_array_indices(uint8_t* data, uint32_t a_index, uint32_t b_index) {
-    rlpp__aligned_sort_buffer_t temp;
-    rlpp_header_t* header = rlpp__header(data);
-    header->epoch++;
-
-    uint32_t a_id = header->map_list[a_index].map_index;
-    uint32_t b_id = header->map_list[b_index].map_index;
-
-    memcpy(temp.bytes, data + a_index * header->element_size, header->element_size);
-    memcpy(data + a_index * header->element_size, data + b_index * header->element_size, header->element_size);
-    memcpy(data + b_index * header->element_size, temp.bytes, header->element_size);
-
-    header->map_list[a_index].map_index = b_id;
-    header->map_list[b_index].map_index = a_id;
-    header->map_list[a_id].array_index = b_index;
-    header->map_list[b_id].array_index = a_index;
 }
 
 static void rlpp__insertion_sort(rlpp_header_t* header, rlpp_compare_callback_t sort_function, uint8_t* data) {
